@@ -1,0 +1,80 @@
+
+	/* req: SETFILELIST lenbytes (followed by filelist data)
+	 * res: OK
+	 */
+	protected function commandSetfilelist($args)
+	{
+		$this->checkLogin();
+		
+		@list($mtime, $sum, $len) = explode(' ', $args, 3);
+
+		if ($len < 1) {
+			throw new Exception('LENGTH_INVALID');
+		}
+
+		if ($len > (10 * 1024 * 1024)) {
+			throw new Exception('LENGTH_TOO_LARGE');
+		}
+		
+		echo "CONTINUE\n";
+
+		$tmpFile = $this->getTempFile();
+
+		if (!$f = fopen($tmpFile, 'w+')) {
+			throw new Exception('INTERNAL_ERROR');
+		}
+
+		$bytesReceived = 0;
+
+		do {
+			$data = fread(STDIN, $len);
+			$bytesReceived += strlen($data);
+			fwrite($f, $data);
+		} while ($bytesReceived < $len);
+
+		fclose($f);
+
+		if (md5_file($tmpFile) !== $sum) {
+			throw new Exception('WRONG_CHECKSUM');
+		}
+
+		if (!$filelist = file($tmpFile)) {
+			throw new Exception('INTERNAL_ERROR');
+		}
+
+		unlink($tmpFile);
+
+		$this->pdo->beginTransaction();
+		
+		try {
+			$this->pdo->prepare('DELETE FROM filelist 
+				WHERE user_id = :user_id
+			')->execute(array(
+				':user_id' => $this->userID
+			));
+
+			foreach ($filelist as $line) {
+				@list($hash, $size, $mtime, $filename) = explode(' ', 4);
+				
+				$this->pdo->prepare('INSERT INTO filelist 
+					SET (user_id, filename, file_id, mtime, size)
+					VALUES (:user_id, :filename, 0, :mtime, :size)
+				')->execute(array(
+					':user_id' => $this->userID
+					,'filename' => $filename
+					,'file_id' => 0
+					,'mtime' => $mtime
+					,'size' => $size
+				));
+			}
+
+		} catch (Exception $e) {
+			$this->pdo->rollBack();
+			throw $e;
+		}
+
+		$this->pdo->commit();
+
+		return true;
+	}
+
