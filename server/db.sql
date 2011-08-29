@@ -1,4 +1,5 @@
 
+/* liste aller user */
 CREATE TABLE users (
 	id INTEGER PRIMARY KEY
 	,name TEXT UNIQUE
@@ -8,11 +9,17 @@ CREATE TABLE users (
 
 INSERT INTO users (name, password_hash) VALUES ('seb', '098f6bcd4621d373cade4e832627b4f6');
 
-CREATE TABLE files (
+/* liste aller dateien fuer alle user */
+CREATE TABLE userfiles (
 	id INTEGER PRIMARY KEY
 	,user_id INTEGER
-	,filename TEXT UNIQUE
+	,filename TEXT
 	,mtime INTEGER
+	,file_id INTEGER
+);
+
+CREATE TABLE files (
+	id INTEGER PRIMARY KEY
 	,size INTEGER
 	,hash TEXT
 );
