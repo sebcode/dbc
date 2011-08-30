@@ -34,8 +34,6 @@ CREATE TABLE files_chunks (
 CREATE TABLE chunks (
 	id INTEGER PRIMARY KEY
 	,hash TEXT UNIQUE
-	/* first 2 chars of hash, i.e. storage filename */
-	,hash12 TEXT
 	,size INTEGER
 	/* position (in 1 MB schritten) im entsprechenden daten-file */
 	/* 0 wenn noch nicht existiert */

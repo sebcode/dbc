@@ -1,50 +1,20 @@
 <?php
 
+require_once('DB.class.php');
+
 class Server
 {
-	protected $workDir;
-	protected $tempDir;
-	protected $pdo;
 	protected $userID = 0;
-	
+	protected $pdo = 0;
+
 	public function __construct()
 	{
-		$this->workDir = dirname(__FILE__) . '/';
-
-		if (!is_dir($this->tempDir = $this->workDir . 'tmp')
-			&& !mkdir($this->tempDir)) {
-
-			throw new Exception('INTERNAL_ERROR');
-		}
-
-		$this->initDB();
+		$this->pdo = DB::getInstance()->getPDO();
 	}
-
+	
 	public function setUserID($userID)
 	{
 		$this->userID = $userID;
-	}
-
-	private function initDB()
-	{
-		$file = $this->workDir . 'db.sqlite';
-
-		$new = ! file_exists($file);
-
-		$this->pdo = new \PDO('sqlite:' . $file);
-		$this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-
-		if ($new) {
-			if (!$sql = file_get_contents($sqlFile = $this->workDir . 'db.sql')) {
-				throw new Exception("Could not load $sqlFile");
-			}
-
-			$statements = explode(';', $sql);
-
-			foreach ($statements as $statement) {
-				$this->pdo->prepare($statement)->execute();
-			}
-		}
 	}
 
 	public function processRequest($data)
@@ -217,15 +187,6 @@ class Server
 		}
 	}
 
-	protected function getTempFile()
-	{
-		if (!$file = tempnam($this->tempDir, 'tmp')) {
-			throw new Exception('INTERNAL_ERROR');
-		}
-
-		return $file;
-	}
-
 	public function getFilelist()
 	{
 		$this->checkLogin();
@@ -306,11 +267,6 @@ class Server
 	*/
 
 		return false;
-	}
-
-	public function setChunk()
-	{
-
 	}
 
 }
