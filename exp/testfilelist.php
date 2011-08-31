@@ -3,6 +3,19 @@
 
 require_once('FileList.php');
 
+$f1 = FileList::createFromDir('../data/');
+
+echo $f1->toString() . "\n\n";
+
+$f2 = FileList::createFromDir('/tmp/data2/');
+
+echo $f2->toString() . "\n\n";
+
+var_export($f1->diff($f2));
+
+
+exit(0);
+
 /* fileliste des servers (oldlist) */
 $d1 = 'AAAA 10 123 test.txt
 BBBB 11 234 test2.txt
@@ -26,4 +39,5 @@ $f2 = new FileList($d2);
 
 $diff = $f1->diff($f2);
 echo var_export($diff, true) . "\n";
+
 
