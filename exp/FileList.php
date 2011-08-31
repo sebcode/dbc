@@ -2,10 +2,8 @@
 
 class FileList
 {
-	private $entries;
+	private $entries = array();
 	
-	private function __construct() { }
-
 	public static function createFromData($data)
 	{
 		$f = new FileList;
@@ -33,6 +31,32 @@ class FileList
 		ksort($f->entries);
 
 		return $f;
+	}
+
+	public static function createFromFile($file)
+	{
+		$f = new FileList;
+		$f->fromFile($file);
+
+		return $f;
+	}
+
+	public function fromFile($file)
+	{
+		$this->entries = array();
+
+		if (!$c = file_get_contents($file)) {
+			return false;
+		}
+
+		$this->parseList($c);
+
+		return true;
+	}
+
+	public function toFile($file)
+	{
+		return file_put_contents($file, $this->toString());
 	}
 
 	public function getEntries()

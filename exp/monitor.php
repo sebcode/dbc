@@ -1,6 +1,9 @@
 <?php
 
-$watchDir = '../data/';
+require_once('FileList.php');
+
+$watchDir = '/tmp/data/';
+$metaDir = '/tmp/meta/';
 
 $filelist = findfiles($watchDir);
 
@@ -8,15 +11,20 @@ while (true) {
 	sleep(1);
 
 	if (localFilelistHasChanged() || remoteFilelistHasChanged()) {
+		echo "dosync\n";
 		dosync();
 	}
 }
 
 function localFilelistHasChanged()
 {
-	global $filelist;
+	global $filelist, $watchDir;
 
-	$newfilelist = findfiles($watchDir);
+	try {
+		$newfilelist = findfiles($watchDir);
+	} catch (RuntimeException $e) {
+		return false;
+	}
 
 	if ($filelist === $newfilelist) {
 		return false;
@@ -44,7 +52,7 @@ function findfiles($dir)
 		$relFilename = substr($file, strlen($dir));
 		$files[$relFilename] = array(
 			'mtime' => $file->getMtime()
-			,'getsize' => $file->getSize()
+			,'size' => $file->getSize()
 		);
 	}
 
@@ -55,6 +63,20 @@ function findfiles($dir)
 
 function dosync()
 {
+	global $watchDir, $metaDir;
+
+	if (file_exists($f = $metaDir . 'filelist.txt')) {
+		$localFilelistOld = FileList::createFromFile($f);
+	} else {
+		$localFilelistOld = new FileList;
+	}
+
+	$localFilelistNew = FileList::createFromDir($watchDir);
+
+	var_export($localFilelistOld->diff($localFilelistNew));
+
+	$localFilelistNew->toFile($metaDir . 'filelist.txt');
+
 /*
 	$remoteFilelist = fetchRemoteFilelist()
 	$localFilelist = fetchLocalFilelist()
