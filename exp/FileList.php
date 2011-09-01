@@ -125,5 +125,25 @@ class FileList
 		return $result;
 	}
 
+	public function getEntry($name)
+	{
+		if (isset($this->entries[$name])) {
+			return $this->entries[$name];
+		}
+
+		return false;
+	}
+
+	public function getNameByHash($hash, $size)
+	{
+		foreach ($this->entries as $name => $meta) {
+			if ($meta['hash'] === $hash && $meta['size'] === $size) {
+				return $name;
+			}
+		}
+
+		return false;
+	}
+
 }
 
