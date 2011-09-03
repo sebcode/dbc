@@ -46,7 +46,7 @@ class FileList
 		$this->entries = array();
 
 		if (!$c = file_get_contents($file)) {
-			return false;
+			throw new Exception("Read failed: $file");
 		}
 
 		$this->parseList($c);
@@ -56,7 +56,11 @@ class FileList
 
 	public function toFile($file)
 	{
-		return file_put_contents($file, $this->toString());
+		if (!file_put_contents($file, $this->toString())) {
+			throw new Exception("Write failed: $file");
+		}
+
+		return true;
 	}
 
 	public function getEntries()
