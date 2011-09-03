@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-require_once('FileList.php');
+require_once('../FileList.class.php');
 
 $f1 = FileList::createFromDir('../data/');
 
