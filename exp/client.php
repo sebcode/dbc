@@ -11,6 +11,8 @@ $rtmpDir = '/tmp/rtmp/';
 $rwatchDir = '/tmp/rdata/';
 $rfilelist = findfiles($rwatchDir);
 
+dosync();
+
 while (true) {
 	sleep(1);
 
@@ -131,7 +133,7 @@ function upload($file, $mtime, $hash, $size)
 	return true;
 }
 
-function commit($name, $hash, $size)
+function commitUpload($name, $hash, $size)
 {
 	global $rwatchDir, $rtmpDir;
 
@@ -156,9 +158,101 @@ function commit($name, $hash, $size)
 	return true;
 }
 
+function commitDownload($name, $hash, $size)
+{
+	global $watchDir, $tmpDir;
+
+	$tmpFile = $tmpDir . "$hash.$size.tmp";
+
+	if (!file_exists($tmpFile)) {
+		echo "commit of $name failed, uploaded file $tmpFile not found\n";
+		return false;
+	}
+
+	$dest = $watchDir . $name;
+
+	if (!is_dir(dirname($dest))) {
+		mkdir(dirname($dest));
+	}
+
+	if (!copy($tmpFile, $dest)) {
+		echo "commit of $name failed.\n";
+		return false;
+	}
+
+	return true;
+}
+
+function getChangeList($diffRemote, $diffLocal, $localFilelistNew, $localFilelistOld, $remoteFilelist)
+{
+	$changeList = array();
+
+	foreach ($diffRemote as $file => $state) {
+		/* datei wurde remote geloescht, oder lokal neu hinzugekommen */
+		if ($state === 'D'
+			&& ($localEntry = $localFilelistNew->getEntry($file))) {
+
+			/* wenn lokal nicht neu oder modifiziert, dann wurde datei remote
+			 * geloescht. => auch lokal loeschen */
+			if (!isset($diffLocal[$file])) {
+				$changeList[] = array(
+					'file' => $file
+					,'action' => 'local_delete'
+					,'entry' => $localEntry
+					,'desc' => "local delete: $file"
+				);
+			}
+			/* wenn lokal neu oder modifiziert, dann uploaden */
+			else {
+				$changeList[] = array(
+					'file' => $file
+					,'action' => 'upload'
+					,'desc' => "upload: $file"
+					,'entry' => $localEntry
+				);
+			}
+		}
+
+		/* datei ist remote modifiziert/neu */
+		if ($state === 'M' || $state === 'N') {
+			/* wenn lokal nicht neu oder modifiziert, dann datei herunterladen */
+			if (!isset($diffLocal[$file])) {
+				$changeList[] = array(
+					'file' => $file
+					,'action' => 'download'
+					,'desc' => "download: $file"
+					,'entry' => $remoteFilelist->getEntry($file)
+				);
+			}
+			/* lokal geloescht */
+			else if ($state === 'N' && $diffLocal[$file] === 'D') {
+				$changeList[] = array(
+					'file' => $file
+					,'action' => 'remote_delete'
+					,'desc' => "remote delete: $file"
+					,'entry' => $localFilelistOld->getEntry($file)
+				);
+			}
+			/* ansonsten uploaden */
+			else {
+				$changeList[] = array(
+					'file' => $file
+					,'action' => 'upload'
+					,'desc' => "upload: $file"
+					,'entry' => $localFilelistNew->getEntry($file)
+				);
+			}
+		}
+	}
+	
+	return $changeList;
+}
+
 function dosync()
 {
 	global $watchDir, $metaDir, $rwatchDir;
+	
+	echo "-------------------------------------------------------------------\n";
 
 	if (file_exists($f = $metaDir . 'filelist.txt')) {
 		$localFilelistOld = FileList::createFromFile($f);
@@ -170,138 +264,86 @@ function dosync()
 
 	$diffLocal = $localFilelistOld->diff($localFilelistNew);
 
-	echo "local localold/localnew: " . var_export($diffLocal, true) . "\n";
+	//echo "local localold/localnew: " . var_export($diffLocal, true) . "\n";
 
 	$remoteFilelist = getRemoteFilelist();
 
 	$diffRemote = $localFilelistNew->diff($remoteFilelist);
 
-	echo "diff localnew/remote: " . var_export($diffRemote, true) . "\n";
+	//echo "diff localnew/remote: " . var_export($diffRemote, true) . "\n";
 
+	/* changelist berechnen */
 
+	$changeList = getChangeList($diffRemote, $diffLocal, $localFilelistNew, $localFilelistOld, $remoteFilelist);
 
-//	$copyList = array();
-//	$commitList = array();
-//
-//	foreach ($diffLocal as $file => $state) {
-//		/* datei wurde lokal geloescht */
-//		/* wir loeschen die datei remote, wenn exakt die selbe datei auch remote existiert. */
-//		if ($state === 'D'
-//			&& ($remoteEntry = $remoteFilelist->getEntry($file))) {
-//		
-//			$localEntry = $localFilelistOld->getEntry($file);
-//
-//			/* von remote loeschen, wenn dort die selbe datei existiert */
-//			if ($remoteEntry['hash'] == $localEntry['hash']
-//				&& $remoteEntry['size'] == $localEntry['size']) {
-//
-//				echo "deleting remote file: $file\n";
-//				unlink($rwatchDir . $file);
-//			}
-//		}
-//
-//	}
-//
-//	foreach ($diffRemote as $file => $state) {
-//		/* datei wurde remote geloescht */
-//		/* wir loeschen die datei lokal, wenn exakt die selbe datei auch lokal existiert. */
-//		if ($state === 'D'
-//			&& ($localEntry = $localFilelistNew->getEntry($file))) {
-//		
-//			$remoteEntry = $remoteFilelist->getEntry($file);
-//
-//			/* lokal loeschen, wenn dort die selbe datei existiert */
-//			if ($remoteEntry['hash'] == $localEntry['hash']
-//				&& $remoteEntry['size'] == $localEntry['size']) {
-//
-//				echo "deleting local file: $file\n";
-//				unlink($watchDir . $file);
-//				unset($localFilelistNew[$file]);
-//			}
-//		}
-//	}
-		
-	//	/* datei wurde lokal modifiziert, uploaden */
-	//	if ($state === 'M') {
-	//		$localEntry = $localFilelistOld->getEntry($file);
-	//	
-	//		if (upload($file, $localEntry['mtime'], $localEntry['hash'], $localEntry['size'])) {
-	//			echo "uploaded $file to remote\n";
+	if (empty($changeList)) {
+		echo "changelist empty.\n";
+		return;
+	}
 
-	//			commit($file, $localEntry['hash'], $localEntry['size']);
-	//		}
-	//	}
+	echo 'commit changeList: ' . var_export($changeList, true) . "\n";
 
-//		/* new file or file has been modified on remote */
-//		if ($state === 'N' || $state === 'M') {
-//			/* download from remote */
-//
-//			$meta = $remoteFilelist->getEntry($file);
-//
-//			if ($downloadFile = download($meta['hash'], $meta['size'])) {
-//				echo "downloaded $file from remote\n";
-//
-//				$copyList[] = array(
-//					'src' => $downloadFile
-//					,'dest' => $watchDir . $file
-//					,'destRel' => $file
-//				);
-//			}
-//		}
-//
-//		/* file does not exist on remote => upload to remote */
-//		if ($state === 'D') {
-//			$meta = $localFilelistNew->getEntry($file);
-//
-//			if (upload($file, $meta['mtime'], $meta['hash'], $meta['size'])) {
-//				echo "uploaded $file to remote\n";
-//
-//				$info = $meta;
-//				$info['file'] = $file;
-//
-//				$commitList[] = $info;
-//			}
-//		}
-	
-//	foreach ($copyList as $info) {
-//		echo "copying " . $info['destRel'] . "\n";
-//		copy($info['src'], $info['dest']);
-//	}
-//
-//	foreach ($commitList as $info) {
-//		echo "commit upload " . $info['file'] . "\n";
-//		commit($info['file'], $info['hash'], $info['size']);
-//	}
+	/* commit remote deletes */
 
-	//$localFilelistNew->toFile($metaDir . 'filelist.txt');
+	foreach ($changeList as $i) {
+		if ($i['action'] === 'remote_delete') {
+			echo "remote delete " . $i['file'] . "...\n";
+			$f = $rwatchDir . $i['file'];
+			if (filesize($f) == $i['entry']['size']) {
+				unlink($f);
+			} else {
+				echo "change detected, CANCEL commit.\n";
+			}
+		}
+	}
+
+	/* commit local deletes */
+	foreach ($changeList as $i) {
+		if ($i['action'] === 'local_delete') {
+			echo "local delete " . $i['file'] . "...\n";
+			$f = $watchDir . $i['file'];
+			if (filesize($f) == $i['entry']['size']) {
+				unlink($f);
+			} else {
+				echo "change detected, CANCEL commit.\n";
+			}
+		}
+	}
+
+	/* downloaden/uploaden */
+	foreach ($changeList as $i) {
+		if ($i['action'] === 'download') {
+			echo "download " . $i['file'] . "...\n";
+			download($i['entry']['hash'], $i['entry']['size']);
+		} else if ($i['action'] === 'upload') {
+			echo "upload " . $i['file'] . "...\n";
+			if (!upload($i['file'], $i['entry']['mtime'], $i['entry']['hash'], $i['entry']['size'])) {
+				return;
+			}
+		}
+	}
+
+	/* commit downloads */
+	foreach ($changeList as $i) {
+		if ($i['action'] === 'download') {
+			echo "commit download " . $i['file'] . "...\n";
+			if (!commitDownload($i['file'], $i['entry']['hash'], $i['entry']['size'])) {
+				return;
+			}
+		}
+	}
+
+	/* commit uploads */
+	foreach ($changeList as $i) {
+		if ($i['action'] === 'upload') {
+			echo "commit upload " . $i['file'] . "...\n";
+			if (!commitUpload($i['file'], $i['entry']['hash'], $i['entry']['size'])) {
+				return;
+			}
+		}
+	}
+
+	$localFilelistNew = FileList::createFromDir($watchDir);
+	$localFilelistNew->toFile($metaDir . 'filelist.txt');
 }
 
-/*
-	$remoteFilelist = fetchRemoteFilelist()
-	$localFilelist = fetchLocalFilelist()
-	$diff = diff($remoteFilelist, $localFilelist)
-	
-	neue datei auf server
-		client <-A server
-	neue datei auf client
-		client A-> server
-
-	datei auf client geloescht
-		client D-> server
-	datei auf server geloescht
-		client <-D server
-
-	datei auf client modifiziert
-		client M-> server
-	datei auf server modifiziert
-		client <-M server
-	
-	konfliktfaelle:
-		datei wurde auf client und server modifiziert
-			=> neueste gewinnt, wenn gleich dann die vom server
-		datei wurde auf client modifiziert und auf server geloescht
-			=> die des clients gewinnt
-		datei wurde auf server modifiziert und lokal geloescht
-			=> die des clients gewinnt
-
-*/
