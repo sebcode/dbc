@@ -1,15 +1,14 @@
 <?php
 
-$config = include('config.php');
+$dir = '../data/';
 
-$it = new RecursiveDirectoryIterator($config['dir']);
+$it = new RecursiveDirectoryIterator($dir);
 
 $files = array();
 
-foreach (new RecursiveIteratorIterator($it) as $file) {
-	$relFilename = substr($file, strlen($config['dir']));
-
-	$size = $file->getSize();
+function dohash($filename)
+{
+	$size = filesize($filename);
 	$chunkSize = 1024 * 1024;
 	$numChunks = ceil($size / $chunkSize);
 	$numFullChunks = floor($size / $chunkSize);
@@ -20,22 +19,44 @@ foreach (new RecursiveIteratorIterator($it) as $file) {
 		$lastChunkSize = $size - ($numFullChunks * $chunkSize);
 	}
 
-	echo $relFilename . "\n";
-	echo "  has size of $size B\n";
-	echo "  has $numChunks chunks of 1 MB ($numFullChunks full)\n";
-	echo "  last chunk size is $lastChunkSize B\n";
+	$result = array();
+	$result['filename'] = $filename;
+	$result['size'] = $size;
+	$result['numChunks'] = $numChunks;
+	$result['numFullChunks'] = $numFullChunks;
+	$result['lastChunkSize'] = $lastChunkSize;
+	$result['chunkHashes'] = array();
+	$result['hash'] = false;
 
-	$f = fopen($file->getPathname(), 'r');
+	$finalHash = false;
+
+	$f = fopen($filename, 'r');
 
 	for ($i = 0; $i < $numChunks; $i++) {
-		 fseek($f, $i * $chunkSize);
-		 $data = fread($f, $chunkSize);
-		 $hash = hash('md4', $data, true);
-		 $hashStr = gethashstr($hash);
-		 echo "    $i : $hashStr\n";
+		fseek($f, $i * $chunkSize);
+		$data = fread($f, $chunkSize);
+		$hash = hash('md4', $data, true);
+		$hashStr = gethashstr($hash);
+		$result['chunkHashes'][$i] = $hashStr;
+
+		if ($finalHash === false) {
+			$finalHash = $hash;
+		} else {
+			$finalHash = xorHash($finalHash, $hash);
+		}
 	}
 
 	fclose($f);
+	
+	$result['hash'] = gethashstr($finalHash);
+
+	return $result;
+}
+
+foreach (new RecursiveIteratorIterator($it) as $file) {
+	$r = dohash($file->getPathname());
+
+	var_export($r);
 }
 
 function gethashstr($hash)
@@ -47,5 +68,20 @@ function gethashstr($hash)
 	}
 
 	return $result;
+}
+
+function xorHash($h1, $h2)
+{
+	if (strlen($h1) !== strlen($h2)) {
+		return false;
+	}
+
+	$hash = '';
+
+	for ($i = 0; $i < strlen($h1); $i++) {
+		$hash .= (int)$h1[$i] xor (int)$h2[$i];
+	}
+
+	return $hash;
 }
 
