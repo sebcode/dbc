@@ -250,68 +250,45 @@ class Client
 		return $changeList;
 	}
 
-	protected function commitChangeList($changeList)
+	protected function commitChange($change)
 	{
-		/* commit remote deletes */
-
-		foreach ($changeList as $i) {
-			if ($i['action'] === 'remote_delete') {
-				echo "remote delete " . $i['file'] . "...\n";
-				$f = $this->rwatchDir . $i['file'];
-				if (filesize($f) == $i['entry']['size']) {
-					unlink($f);
-				} else {
-					echo "change detected, CANCEL commit.\n";
-				}
-			}
+		if ($change['action'] === 'remote_delete') {
+			echo "remote delete " . $change['file'] . "...\n";
+			$f = $this->rwatchDir . $change['file'];
+			
+			unlink($f);
+			return true;
 		}
 
-		/* commit local deletes */
-		foreach ($changeList as $i) {
-			if ($i['action'] === 'local_delete') {
-				echo "local delete " . $i['file'] . "...\n";
-				$f = $this->watchDir . $i['file'];
-				if (filesize($f) == $i['entry']['size']) {
-					unlink($f);
-				} else {
-					echo "change detected, CANCEL commit.\n";
-				}
+		if ($change['action'] === 'local_delete') {
+			echo "local delete " . $change['file'] . "...\n";
+			$f = $this->watchDir . $change['file'];
+			
+			unlink($f);
+			return true;
+		}
+			
+		if ($change['action'] === 'download') {
+			echo "download " . $change['file'] . "...\n";
+			
+			if (!$this->download($change['entry']['hash'], $change['entry']['size'])) {
+				return false;
 			}
+
+			return true;
+		}
+		
+		if ($change['action'] === 'upload') {
+			echo "upload " . $change['file'] . "...\n";
+			
+			if (!$this->upload($change['file'], $change['entry']['mtime'], $change['entry']['hash'], $change['entry']['size'])) {
+				return false;
+			}
+
+			return true;
 		}
 
-		/* downloaden/uploaden */
-		foreach ($changeList as $i) {
-			if ($i['action'] === 'download') {
-				echo "download " . $i['file'] . "...\n";
-				$this->download($i['entry']['hash'], $i['entry']['size']);
-			} else if ($i['action'] === 'upload') {
-				echo "upload " . $i['file'] . "...\n";
-				if (!$this->upload($i['file'], $i['entry']['mtime'], $i['entry']['hash'], $i['entry']['size'])) {
-					return;
-				}
-			}
-		}
-
-		/* commit downloads */
-		foreach ($changeList as $i) {
-			if ($i['action'] === 'download') {
-				echo "commit download " . $i['file'] . "...\n";
-				if (!$this->commitDownload($i['file'], $i['entry']['hash'], $i['entry']['size'])) {
-					return;
-				}
-			}
-		}
-
-		/* commit uploads */
-		foreach ($changeList as $i) {
-			if ($i['action'] === 'upload') {
-				echo "commit upload " . $i['file'] . "...\n";
-				if (!$this->commitUpload($i['file'], $i['entry']['hash'], $i['entry']['size'])) {
-					return;
-				}
-			}
-		}
-
+		return false;
 	}
 
 	protected function doSync()
@@ -325,12 +302,16 @@ class Client
 		}
 
 		$localFilelistNew = FileList::createFromDir($this->watchDir);
-
 		$diffLocal = $localFilelistOld->diff($localFilelistNew);
 
 		$remoteFilelist = $this->getRemoteFilelist();
-
 		$diffRemote = $localFilelistNew->diff($remoteFilelist);
+
+		#echo 'localFilelistOld: ' . var_export($localFilelistOld->toString(), true) . "\n";
+		#echo 'localFilelistNew: ' . var_export($localFilelistNew->toString(), true) . "\n";
+		#echo 'remoteFilelist: ' . var_export($remoteFilelist->toString(), true) . "\n";
+		echo 'diffLocal: ' . var_export($diffLocal, true) . "\n";
+		echo 'diffRemote: ' . var_export($diffRemote, true) . "\n";
 
 		/* changelist berechnen */
 
@@ -343,7 +324,17 @@ class Client
 
 		echo 'commit changeList: ' . var_export($changeList, true) . "\n";
 
-		$this->commitChangeList($changeList);
+		// TODO
+		// erst remote actions ausfuehren (upload, remote delete)
+		// dann local actions einzeln (download, local del)
+		//   => nach jeder action fileliste schreiben
+
+		foreach ($changeList as $change) {
+			if (!$this->commitChange($change)) {
+				echo "commit change failed\n";
+				return;
+			}
+		}
 
 		$localFilelistNew = FileList::createFromDir($this->watchDir);
 		$localFilelistNew->toFile($this->metaDir . 'filelist.txt');

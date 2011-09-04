@@ -149,5 +149,28 @@ class FileList
 		return false;
 	}
 
+	public function setEntry($name, $hash, $size, $mtime)
+	{
+		$this->entries[$name] = array(
+			'hash' => $hash
+			,'mtime' => $mtime
+			,'size' => $size
+		);
+
+		ksort($f->entries);
+
+		return true;
+	}
+
+	public function deleteEntry($name)
+	{
+		if (!isset($this->entries[$name])) {
+			return false;
+		}
+
+		unset($this->entries[$name]);
+		return true;
+	}
+
 }
 
