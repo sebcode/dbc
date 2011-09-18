@@ -5,17 +5,44 @@ require_once('FileList.class.php');
 
 class Client
 {
-	protected $tmpDir = '/tmp/tmp/';
-	protected $metaDir = '/tmp/meta/';
-	protected $watchDir = '/tmp/data/';
+	protected $tmpDir = '/Users/seb/tmp/tmp/';
+	protected $metaDir = '/Users/seb/tmp/meta/';
+	protected $watchDir = '/Users/seb/tmp/data/';
 	protected $filelist = array();
 
-	protected $rtmpDir = '/tmp/rtmp/';
-	protected $rwatchDir = '/tmp/rdata/';
+	protected $rtmpDir = '/Users/seb/tmp/rtmp/';
+	protected $rwatchDir = '/Users/seb/tmp/rdata/';
 	protected $rfilelist = array();
+
+	protected $serverUrl = 'http://localhost/~seb/dbc/';
+	protected $user = 'seb';
+	protected $pwHash = '8ba46f039d275920eb891f1ff645f059';
 
 	public function start()
 	{
+		$lockFile = $this->metaDir . 'lock';
+
+		if (file_exists($lockFile)) {
+			if (($c = file_get_contents($lockFile)) === false) {
+				throw new Exception('Could not read lockfile ' . $lockFile);
+			}
+
+			$oldPid = (int) trim($c);
+
+			if ($oldPid) {
+				if (posix_getsid($oldPid) === false) {
+					echo "remove stale lockfile $lockFile\n";
+					unlink($lockFile);
+				} else {
+					throw new Exception("already running with pid $oldPid");
+				}
+			}
+		}
+
+		if (file_put_contents($lockFile, posix_getpid() . "\n") === false) {
+			throw new Exception('Could not write lockfile ' . $lockFile);
+		}
+
 		$this->filelist = $this->findfiles($this->watchDir);
 		$this->rfilelist = $this->findfiles($this->rwatchDir);
 		$forceSync = true;
@@ -37,6 +64,13 @@ class Client
 			}
 			
 			sleep(1);
+		}
+	}
+
+	public function stop()
+	{
+		if (file_exists($this->metaDir . 'lock')) {
+			unlink($this->metaDir . 'lock');
 		}
 	}
 
@@ -275,6 +309,10 @@ class Client
 				return false;
 			}
 
+			if (!$this->commitDownload($change['file'], $change['entry']['hash'], $change['entry']['size'])) {
+				return false;
+			}
+
 			return true;
 		}
 		
@@ -282,6 +320,10 @@ class Client
 			echo "upload " . $change['file'] . "...\n";
 			
 			if (!$this->upload($change['file'], $change['entry']['mtime'], $change['entry']['hash'], $change['entry']['size'])) {
+				return false;
+			}
+
+			if (!$this->commitUpload($change['file'], $change['entry']['hash'], $change['entry']['size'])) {
 				return false;
 			}
 
@@ -324,20 +366,69 @@ class Client
 
 		echo 'commit changeList: ' . var_export($changeList, true) . "\n";
 
-		// TODO
-		// erst remote actions ausfuehren (upload, remote delete)
-		// dann local actions einzeln (download, local del)
-		//   => nach jeder action fileliste schreiben
-
+		/* remote deletes */
 		foreach ($changeList as $change) {
+			if ($change['action'] !== 'remote_delete') {
+				continue;
+			}
+
 			if (!$this->commitChange($change)) {
 				echo "commit change failed\n";
 				return;
 			}
+			
+			echo "patching filelist for remote_delete: del ". $change['file'] ."\n";
+			$localFilelistOld->deleteEntry($change['file']);
+			$localFilelistOld->toFile($this->metaDir . 'filelist.txt');
 		}
 
-		$localFilelistNew = FileList::createFromDir($this->watchDir);
-		$localFilelistNew->toFile($this->metaDir . 'filelist.txt');
+		/* upload */
+		foreach ($changeList as $change) {
+			if ($change['action'] !== 'upload') {
+				continue;
+			}
+
+			if (!$this->commitChange($change)) {
+				echo "commit change failed\n";
+				return;
+			}
+			
+			echo "patching filelist for upload: adding ". $change['file'] ."\n";
+			$localFilelistOld->setEntry($change['file'], $change['entry']['hash'], $change['entry']['size'], $change['entry']['mtime']);
+			$localFilelistOld->toFile($this->metaDir . 'filelist.txt');
+		}
+
+		/* local delete */
+		foreach ($changeList as $change) {
+			if ($change['action'] !== 'local_delete') {
+				continue;
+			}
+
+			if (!$this->commitChange($change)) {
+				echo "commit change failed\n";
+				return;
+			}
+
+			echo "patching filelist for local_delete: del ". $change['file'] ."\n";
+			$localFilelistOld->deleteEntry($change['file']);
+			$localFilelistOld->toFile($this->metaDir . 'filelist.txt');
+		}
+
+		/* downloads */
+		foreach ($changeList as $change) {
+			if ($change['action'] !== 'download') {
+				continue;
+			}
+
+			if (!$this->commitChange($change)) {
+				echo "commit change failed\n";
+				return;
+			}
+			
+			echo "patching filelist for download: adding ". $change['file'] ."\n";
+			$localFilelistOld->setEntry($change['file'], $change['entry']['hash'], $change['entry']['size'], $change['entry']['mtime']);
+			$localFilelistOld->toFile($this->metaDir . 'filelist.txt');
+		}
 	}
 
 }

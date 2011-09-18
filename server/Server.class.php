@@ -4,7 +4,7 @@ require_once('../client/FileList.class.php');
 
 class Server
 {
-	protected $baseDir = '/tmp/server/';
+	protected $baseDir = '/Users/seb/tmp/dbcserver/';
 	protected $params = false;
 	protected $userDir = false;
 	protected $dataDir = false;
