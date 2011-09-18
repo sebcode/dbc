@@ -2,6 +2,7 @@
 <?php
 
 require_once('FileList.class.php');
+require_once('RemoteChangeListener.class.php');
 
 class Client
 {
@@ -18,30 +19,15 @@ class Client
 	protected $user = 'seb';
 	protected $pwHash = '8ba46f039d275920eb891f1ff645f059';
 
+	protected $rcl;
+	protected $lastRemoteChange = 0;
+
 	public function start()
 	{
-		$lockFile = $this->metaDir . 'lock';
+		$this->handleStartupLock();
 
-		if (file_exists($lockFile)) {
-			if (($c = file_get_contents($lockFile)) === false) {
-				throw new Exception('Could not read lockfile ' . $lockFile);
-			}
-
-			$oldPid = (int) trim($c);
-
-			if ($oldPid) {
-				if (posix_getsid($oldPid) === false) {
-					echo "remove stale lockfile $lockFile\n";
-					unlink($lockFile);
-				} else {
-					throw new Exception("already running with pid $oldPid");
-				}
-			}
-		}
-
-		if (file_put_contents($lockFile, posix_getpid() . "\n") === false) {
-			throw new Exception('Could not write lockfile ' . $lockFile);
-		}
+		$this->rcl = new RemoteChangeListener($this->serverUrl, $this->user, $this->pwHash);
+		$this->rcl->start();
 
 		$this->filelist = $this->findfiles($this->watchDir);
 		$this->rfilelist = $this->findfiles($this->rwatchDir);
@@ -74,6 +60,38 @@ class Client
 		}
 	}
 
+	public function remoteChangedCallback()
+	{
+		echo "remoteChangedCallback\n";
+		$this->rcl->setLastChange();
+	}
+
+	protected function handleStartupLock()
+	{
+		$lockFile = $this->metaDir . 'lock';
+
+		if (file_exists($lockFile)) {
+			if (($c = file_get_contents($lockFile)) === false) {
+				throw new Exception('Could not read lockfile ' . $lockFile);
+			}
+
+			$oldPid = (int) trim($c);
+
+			if ($oldPid) {
+				if (posix_getsid($oldPid) === false) {
+					echo "remove stale lockfile $lockFile\n";
+					unlink($lockFile);
+				} else {
+					throw new Exception("already running with pid $oldPid");
+				}
+			}
+		}
+
+		if (file_put_contents($lockFile, posix_getpid() . "\n") === false) {
+			throw new Exception('Could not write lockfile ' . $lockFile);
+		}
+	}
+
 	protected function localFilelistHasChanged()
 	{
 		try {
@@ -94,20 +112,14 @@ class Client
 
 	protected function remoteFilelistHasChanged()
 	{
-		try {
-			$newFilelist = $this->findFiles($this->rwatchDir);
-		} catch (RuntimeException $e) {
-			return false;
+		$lc = $this->rcl->getLastChange();
+
+		if ($lc != $this->lastRemoteChange) {
+			$this->lastRemoteChange = $lc;
+			return true;
 		}
 
-		if ($this->rfilelist === $newFilelist) {
-			return false;
-		}
-
-		$this->rfilelist = $newFilelist;
-
-		echo "remote filelist has changed.\n";
-		return true;
+		return false;
 	}
 
 	protected function getRemoteFilelist()

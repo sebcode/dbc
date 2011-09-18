@@ -22,6 +22,9 @@ class Server
 		switch ($this->params['cmd']) {
 			case 'getfilelist': return $this->cmdGetfilelist();
 			case 'uploadfile': return $this->cmdUploadfile();
+			case 'downloadfile': return $this->cmdDownloadfile();
+			case 'deletefile': return $this->cmdDeletefile();
+			case 'idle': return $this->cmdIdle();
 		}
 
 		throw new Exception('INVALID_REQUEST');
@@ -69,13 +72,95 @@ class Server
 		return true;
 	}
 
+	protected function cmdDownloadfile()
+	{
+		if (empty($this->params['filehash']) || empty($this->params['filesize'])) {
+			throw new Exception('INVALID_REQUEST');
+		}
+
+		$hash = $this->params['filehash'];
+		$size = $this->params['filesize'];
+
+		$filelist = $this->getFilelist();
+
+		if (!$name = $filelist->getNameByHash($hash, $size)) {
+			throw new Exception('FILE_NOT_FOUND');
+		}
+
+		if (!$f = fopen($this->dataDir . $name, 'r')) {
+			throw new Exception('FILE_NOT_FOUND');
+		}
+
+		header('Content-Length: ' . $size);
+
+		fpassthru($f);
+		fclose($f);
+
+		return true;
+	}
+
+	protected function cmdDeletefile()
+	{
+		if (empty($this->params['filehash']) || empty($this->params['filesize'])) {
+			throw new Exception('INVALID_REQUEST');
+		}
+
+		$hash = $this->params['filehash'];
+		$size = $this->params['filesize'];
+
+		$filelist = $this->getFilelist();
+
+		if (!$name = $filelist->getNameByHash($hash, $size)) {
+			throw new Exception('FILE_NOT_FOUND');
+		}
+
+		unlink($this->dataDir . $name);
+
+		echo "OK\n";
+		return true;
+	}
+
+	protected function cmdIdle()
+	{
+		ignore_user_abort(false);
+
+		$f = $this->getFilelist();
+		$originalHash = md5($f->toString());
+
+		echo "IDLE\n";
+		flush();
+		ob_flush();
+
+		while (true) {
+			sleep(1);
+
+			$f = $this->getFilelist();
+			$hash = md5($f->toString());
+
+			if ($hash != $originalHash) {
+				break;
+			}
+			
+			if (connection_status() != CONNECTION_NORMAL) {
+				break;
+			}
+		}
+
+		return true;
+	}
+
 	protected function cmdGetfilelist()
 	{
-		$f = FileList::createFromDir($this->dataDir);
+		$f = $this->getFilelist();
 
 		echo $f->toString();
 
 		return true;
+	}
+
+	protected function getFilelist()
+	{
+		return FileList::createFromDir($this->dataDir);
 	}
 
 	protected function checkAuth()

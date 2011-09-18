@@ -5,8 +5,9 @@ declare(ticks = 1);
 
 require_once('Client.class.php');
 
-pcntl_signal(SIGTERM, "signalHandler");
-pcntl_signal(SIGINT, "signalHandler");
+pcntl_signal(SIGTERM, "signalHandlerAbort");
+pcntl_signal(SIGINT, "signalHandlerAbort");
+pcntl_signal(SIGUSR1, "signalHandlerUsr1");
 
 try {
 	$client = new Client;
@@ -17,7 +18,14 @@ try {
 	exit(1);
 }
 
-function signalHandler()
+function signalHandlerUsr1()
+{
+	if (isset($GLOBALS['client'])) {
+		$GLOBALS['client']->remoteChangedCallback();
+	}
+}
+
+function signalHandlerAbort()
 {
 	if (isset($GLOBALS['client'])) {
 		$GLOBALS['client']->stop();

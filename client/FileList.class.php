@@ -141,7 +141,7 @@ class FileList
 	public function getNameByHash($hash, $size)
 	{
 		foreach ($this->entries as $name => $meta) {
-			if ($meta['hash'] === $hash && $meta['size'] === $size) {
+			if ($meta['hash'] == $hash && $meta['size'] == $size) {
 				return $name;
 			}
 		}
