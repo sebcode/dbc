@@ -45,7 +45,7 @@ class FileList
 	{
 		$this->entries = array();
 
-		if (!$c = file_get_contents($file)) {
+		if (($c = file_get_contents($file)) === false) {
 			throw new Exception("Read failed: $file");
 		}
 
@@ -56,7 +56,7 @@ class FileList
 
 	public function toFile($file)
 	{
-		if (!file_put_contents($file, $this->toString())) {
+		if (file_put_contents($file, $this->toString()) === false) {
 			throw new Exception("Write failed: $file");
 		}
 
@@ -157,7 +157,7 @@ class FileList
 			,'size' => $size
 		);
 
-		ksort($f->entries);
+		ksort($this->entries);
 
 		return true;
 	}
