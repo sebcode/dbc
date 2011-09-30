@@ -6,21 +6,31 @@ require_once('RemoteChangeListener.class.php');
 
 class Client
 {
-	protected $tmpDir = '/Users/seb/tmp/tmp/';
-	protected $metaDir = '/Users/seb/tmp/meta/';
-	protected $watchDir = '/Users/seb/tmp/data/';
 	protected $filelist = array();
 
-	protected $rtmpDir = '/Users/seb/tmp/rtmp/';
-	protected $rwatchDir = '/Users/seb/tmp/rdata/';
-	protected $rfilelist = array();
-
-	protected $serverUrl = 'http://localhost/~seb/dbc/';
-	protected $user = 'seb';
-	protected $pwHash = '8ba46f039d275920eb891f1ff645f059';
+	protected $serverUrl;
+	protected $user;
+	protected $pwHash;
+	protected $watchDir;
+	protected $tmpDir;
+	protected $metaDir;
 
 	protected $rcl;
 	protected $lastRemoteChange = 0;
+
+	public function __construct($watchDir, $serverUrl, $user, $pwHash)
+	{
+		$this->watchDir = rtrim($watchDir, '/') . '/';
+		$this->serverUrl = $serverUrl;
+		$this->user = $user;
+		$this->pwHash = $pwHash;
+
+		@mkdir($this->metaDir . '.dbc');
+		$this->metaDir = $this->watchDir . '.dbc/';
+
+		$this->tmpDir = $this->metaDir . 'tmp/';
+		@mkdir($this->tmpDir);
+	}
 
 	public function start()
 	{
@@ -30,7 +40,6 @@ class Client
 		$this->rcl->start();
 
 		$this->filelist = $this->findfiles($this->watchDir);
-		$this->rfilelist = $this->findfiles($this->rwatchDir);
 		$forceSync = true;
 
 		while (true) {
@@ -124,7 +133,11 @@ class Client
 
 	protected function getRemoteFilelist()
 	{
-		return FileList::createFromDir($this->rwatchDir);
+		$res = $this->sendRequest('getfilelist');
+
+		echo "received remote filelist: $res\n";
+
+		return FileList::createFromData($res);
 	}
 
 	protected function findFiles($dir)
@@ -146,26 +159,53 @@ class Client
 		return $files;
 	}
 
-	protected function download($hash, $size)
+	protected function download($hash, $size, $name)
 	{
-		$f = FileList::createFromDir($this->rwatchDir);
-
-		if (!$name = $f->getNameByHash($hash, $size)) {
-			return false;
-		}
-
 		$tmpFile = $this->tmpDir . $hash . '.' . $size . '.tmp';
+		
+		$fp = fopen($tmpFile, 'w+');
 
-		if (file_exists($tmpFile)) {
-			unlink($tmpFile);
+		if (!$fp) {
+			throw new Exception("could not open $tmpFile for writing");
 		}
 
-		if (!copy($this->rwatchDir . $name, $tmpFile)) {
-			echo "failed to download $name from remote\n";
-			return false;
+		$ch = $this->getCurlHandle('downloadfile', array(
+			'filehash' => $hash,
+			'filesize' => $size
+		));
+
+		curl_setopt($ch, CURLOPT_FILE, $fp);
+		curl_exec($ch);
+		curl_close($ch);
+		fclose($fp);
+		
+		$actualSize = filesize($tmpFile);
+
+		if ($actualSize != $size) {
+			throw new Exception("downloaded file $tmpFile has unexpected size $actualSize (exp: $size)");
 		}
 
-		return $tmpFile;
+		$actualHash = md5_file($tmpFile);
+
+		if ($actualHash != $hash) {
+			throw new Exception("downloaded file $tmpFile has unexpected hash $actualHash");
+		}
+
+		$dest = $this->watchDir . $name;
+
+		if (file_exists($dest)) {
+			unlink($dest);
+		}
+
+		if (!is_dir(dirname($dest))) {
+			mkdir(dirname($dest));
+		}
+
+		if (!rename($tmpFile, $dest)) {
+			throw new Exception("failed to move $tmpFile to $dest");
+		}
+
+		return true;
 	}
 
 	protected function upload($file, $mtime, $hash, $size)
@@ -176,56 +216,44 @@ class Client
 			throw new Exception("upload of $file failed, mtime changed.");
 		}
 
-		$dest = $this->rtmpDir . $hash .'.'. $size . '.tmp';
+		$tmpFile = $this->tmpDir . $hash .'.'. $size . '.upload.tmp';
 
-		if (!copy($localFile, $dest)) {
-			throw new Exception("upload of $file failed.");
+		if (!copy($localFile, $tmpFile)) {
+			throw new Exception("could not copy $localFile to $tmpFile");
 		}
+
+		$ch = $this->getCurlHandle('uploadfile', array(
+			'filehash' => $hash,
+			'filesize' => $size,
+			'filename' => $file
+		));
+
+		$postFields = array(
+			'file' => "@$tmpFile"
+		);
+
+		curl_setopt($ch, CURLOPT_POST, true);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+		$res = curl_exec($ch);
 		
-		return true;
-	}
-
-	protected function commitUpload($name, $hash, $size)
-	{
-		$tmpFile = $this->rtmpDir . "$hash.$size.tmp";
-
-		if (!file_exists($tmpFile)) {
-			echo "commit of $name failed, uploaded file $tmpFile not found\n";
-			return false;
-		}
-
-		$dest = $this->rwatchDir . $name;
-
-		if (!is_dir(dirname($dest))) {
-			mkdir(dirname($dest));
-		}
-
-		if (!copy($tmpFile, $dest)) {
-			echo "commit of $name failed.\n";
-			return false;
+		unlink($tmpFile);
+		
+		if (trim($res) != 'OK') {
+			throw new Exception('upload failed, server response: ' . $res . "\n");
 		}
 
 		return true;
 	}
 
-	protected function commitDownload($name, $hash, $size)
+	protected function remoteDelete($hash, $size)
 	{
-		$tmpFile = $this->tmpDir . "$hash.$size.tmp";
+		$res = $this->sendRequest('deletefile', array(
+			'filehash' => $hash,
+			'filesize' => $size
+		));
 
-		if (!file_exists($tmpFile)) {
-			echo "commit of $name failed, uploaded file $tmpFile not found\n";
-			return false;
-		}
-
-		$dest = $this->watchDir . $name;
-
-		if (!is_dir(dirname($dest))) {
-			mkdir(dirname($dest));
-		}
-
-		if (!copy($tmpFile, $dest)) {
-			echo "commit of $name failed.\n";
-			return false;
+		if (trim($res) != 'OK') {
+			throw new Exception('upload failed, server response: ' . $res . "\n");
 		}
 
 		return true;
@@ -300,9 +328,9 @@ class Client
 	{
 		if ($change['action'] === 'remote_delete') {
 			echo "remote delete " . $change['file'] . "...\n";
-			$f = $this->rwatchDir . $change['file'];
-			
-			unlink($f);
+
+			$this->remoteDelete($change['entry']['hash'], $change['entry']['size']);
+
 			return true;
 		}
 
@@ -317,11 +345,7 @@ class Client
 		if ($change['action'] === 'download') {
 			echo "download " . $change['file'] . "...\n";
 			
-			if (!$this->download($change['entry']['hash'], $change['entry']['size'])) {
-				return false;
-			}
-
-			if (!$this->commitDownload($change['file'], $change['entry']['hash'], $change['entry']['size'])) {
+			if (!$this->download($change['entry']['hash'], $change['entry']['size'], $change['file'])) {
 				return false;
 			}
 
@@ -332,10 +356,6 @@ class Client
 			echo "upload " . $change['file'] . "...\n";
 			
 			if (!$this->upload($change['file'], $change['entry']['mtime'], $change['entry']['hash'], $change['entry']['size'])) {
-				return false;
-			}
-
-			if (!$this->commitUpload($change['file'], $change['entry']['hash'], $change['entry']['size'])) {
 				return false;
 			}
 
@@ -441,6 +461,33 @@ class Client
 			$localFilelistOld->setEntry($change['file'], $change['entry']['hash'], $change['entry']['size'], $change['entry']['mtime']);
 			$localFilelistOld->toFile($this->metaDir . 'filelist.txt');
 		}
+	}
+
+	protected function getCurlHandle($cmd, $args = array())
+	{
+		$url = $this->serverUrl
+			. '?user=' . $this->user
+			. '&pass=' . $this->pwHash
+			. "&cmd=$cmd";
+
+		foreach ($args as $argName => $argVal) {
+			$url .= '&' . rawurlencode($argName) . '=' . rawurlencode($argVal);
+		}
+
+		echo "$url\n";
+
+		$ch = curl_init($url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+		return $ch;
+	}
+
+	protected function sendRequest($cmd, $args = array())
+	{
+		$ch = $this->getCurlHandle($cmd, $args);
+		
+		return curl_exec($ch);
 	}
 
 }

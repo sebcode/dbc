@@ -8,6 +8,8 @@ class FileList
 	{
 		$f = new FileList;
 		$f->parseList($data);
+		
+		return $f;
 	}
 
 	public static function createFromDir($dir)
@@ -20,6 +22,10 @@ class FileList
 
 		foreach (new RecursiveIteratorIterator($it) as $file) {
 			$relName = substr($file, strlen($dir));
+
+			if (strpos($relName, '.dbc') === 0) {
+				continue;
+			}
 
 			$f->entries[$relName] = array(
 				'hash' => md5_file($file)

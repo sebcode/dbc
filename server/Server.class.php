@@ -13,6 +13,11 @@ class Server
 	{
 		$this->params = $_REQUEST;
 
+		if (empty($this->params['cmd'])) {
+			echo "SERVER_OK\n";
+			return true;
+		}
+
 		$this->checkAuth();
 
 		if (empty($this->params['cmd'])) {
@@ -25,6 +30,7 @@ class Server
 			case 'downloadfile': return $this->cmdDownloadfile();
 			case 'deletefile': return $this->cmdDeletefile();
 			case 'idle': return $this->cmdIdle();
+			case 'ping': return $this->cmdPing();
 		}
 
 		throw new Exception('INVALID_REQUEST');
@@ -34,12 +40,16 @@ class Server
 	{
 		// TODO zieldatei locken
 
-		if (empty($this->params['filehash']) || empty($this->params['filesize'])) {
+		if (!isset($this->params['filehash'])
+			|| !isset($this->params['filesize'])
+			|| !isset($this->params['filename'])) {
+
 			throw new Exception('INVALID_REQUEST');
 		}
 
 		$expectHash = $this->params['filehash'];
 		$expectSize = $this->params['filesize'];
+		$name = $this->params['filename'];
 
 		$tmpFile = $_FILES['file']['tmp_name'];
 
@@ -58,7 +68,7 @@ class Server
 			throw new Exception('UNEXPECTED_SIZE');
 		}
 
-		$filename = $this->dataDir . $_FILES['file']['name'];
+		$filename = $this->dataDir . $name;
 		
 		if (!is_dir($d = dirname($filename)) && !mkdir($d)) {
 			throw new Exception('INTERNAL_ERROR');
@@ -74,7 +84,7 @@ class Server
 
 	protected function cmdDownloadfile()
 	{
-		if (empty($this->params['filehash']) || empty($this->params['filesize'])) {
+		if (!isset($this->params['filehash']) || !isset($this->params['filesize'])) {
 			throw new Exception('INVALID_REQUEST');
 		}
 
@@ -101,7 +111,9 @@ class Server
 
 	protected function cmdDeletefile()
 	{
-		if (empty($this->params['filehash']) || empty($this->params['filesize'])) {
+		if (!isset($this->params['filehash'])
+			|| !isset($this->params['filesize'])) {
+
 			throw new Exception('INVALID_REQUEST');
 		}
 
@@ -145,6 +157,13 @@ class Server
 				break;
 			}
 		}
+
+		return true;
+	}
+
+	protected function cmdPing()
+	{
+		echo "PONG\n";
 
 		return true;
 	}
