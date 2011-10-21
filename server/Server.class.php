@@ -4,11 +4,16 @@ require_once('../client/FileList.class.php');
 
 class Server
 {
-	protected $baseDir = '/Users/seb/tmp/dbcserver/';
+	protected $baseDir;
 	protected $params = false;
 	protected $userDir = false;
 	protected $dataDir = false;
-	
+
+	public function __construct($baseDir)
+	{
+		$this->baseDir = rtrim($baseDir, '/') . '/';
+	}
+
 	public function handleRequest()
 	{
 		$this->params = $_REQUEST;
