@@ -67,6 +67,7 @@ class RemoteChangeListener
 		$ch = curl_init($this->serverUrl . '?user=' . $this->user . '&pass=' . $this->pwHash . '&cmd=idle');
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 		curl_exec($ch);
 
 		if (posix_getppid() != $this->parentPid) {

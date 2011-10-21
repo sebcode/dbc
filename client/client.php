@@ -124,14 +124,16 @@ function askServer()
 		$ch = curl_init($serverUrl);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 		$res = curl_exec($ch);
+		$err = curl_error($ch);
 		curl_close($ch);
 
 		if (trim($res) == 'SERVER_OK') {
 			return $serverUrl;
 		}
 		
-		echo "Not a valid server, try again.\n";
+		echo "Not a valid server ($err), try again.\n";
 	}
 }
 
@@ -152,6 +154,7 @@ function askAuth($serverUrl)
 		$ch = curl_init($url);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 		$res = curl_exec($ch);
 		curl_close($ch);
 
