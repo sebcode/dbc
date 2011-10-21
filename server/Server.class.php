@@ -51,6 +51,10 @@ class Server
 		$expectSize = $this->params['filesize'];
 		$name = $this->params['filename'];
 
+		if (!isset($_FILES['file']['tmp_name'])) {
+			throw new Exception('INVALID_REQUEST');
+		}
+
 		$tmpFile = $_FILES['file']['tmp_name'];
 
 		if (!is_uploaded_file($tmpFile)) {
