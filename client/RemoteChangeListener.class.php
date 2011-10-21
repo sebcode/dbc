@@ -44,9 +44,19 @@ class RemoteChangeListener
 	protected function childLoop()
 	{
 		while (true) {
+			if (posix_getppid() != $this->parentPid) {
+				/* parent process died */
+				break;
+			}
+
 			$this->sendIdle();
 
 			sleep(5);
+		
+			if (posix_getppid() != $this->parentPid) {
+				/* parent process died */
+				break;
+			}
 		}
 
 		exit();
@@ -56,8 +66,12 @@ class RemoteChangeListener
 	{
 		$ch = curl_init($this->serverUrl . '?user=' . $this->user . '&pass=' . $this->pwHash . '&cmd=idle');
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 		curl_exec($ch);
+
+		if (posix_getppid() != $this->parentPid) {
+			return false;
+		}
 
 		posix_kill($this->parentPid, SIGUSR1);
 	}
