@@ -39,6 +39,25 @@ class FileList
 		return $f;
 	}
 
+	public function updateEntry($file, $baseDir)
+	{
+		if (!is_file($baseDir . $file)) {
+			if (isset($this->entries[$file])) {
+				unset($this->entries[$file]);
+			}
+
+			return;
+		}
+
+		$this->entries[$file] = array(
+			'hash' => md5_file($baseDir . $file)
+			,'mtime' => filemtime($baseDir . $file)
+			,'size' => filesize($baseDir . $file)
+		);
+
+		return;
+	}
+
 	public static function createFromFile($file)
 	{
 		$f = new FileList;

@@ -263,6 +263,22 @@ class Client
 	{
 		$changeList = array();
 
+		/* lokale fileliste aktualisieren */
+		foreach ($diffLocal as $file => $state) {
+			if (isset($diffRemote[$file])) {
+				continue;
+			}
+			
+			$localEntry = $localFilelistNew->getEntry($file);
+
+			/* obsoleten eintrag aus fileliste entfernen, oder fehlenden
+			 * eintrag hinzufuegen. */
+			$changeList[] = array(
+				'file' => $file
+				,'action' => 'filelist_update'
+			);
+		}
+
 		foreach ($diffRemote as $file => $state) {
 			/* datei wurde remote geloescht, oder lokal neu hinzugekommen */
 			if ($state === 'D'
@@ -460,6 +476,14 @@ class Client
 			echo "patching filelist for download: adding ". $change['file'] ."\n";
 			$localFilelistOld->setEntry($change['file'], $change['entry']['hash'], $change['entry']['size'], $change['entry']['mtime']);
 			$localFilelistOld->toFile($this->metaDir . 'filelist.txt');
+		}
+		
+		/* filelist updates */
+		foreach ($changeList as $change) {
+			if ($change['action'] === 'filelist_update') {
+				$localFilelistOld->updateEntry($change['file'], $this->watchDir);
+				$localFilelistOld->toFile($this->metaDir . 'filelist.txt');
+			}
 		}
 	}
 
