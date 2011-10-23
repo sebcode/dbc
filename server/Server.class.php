@@ -1,6 +1,6 @@
 <?php
 
-require_once('../client/FileList.class.php');
+require_once('../common/FileList.class.php');
 
 class Server
 {

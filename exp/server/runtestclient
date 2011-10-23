@@ -1,3 +1,0 @@
-if ! test -p fifo; then mkfifo fifo; fi;
-<fifo /usr/bin/php testclient.php | /usr/bin/php server.php >fifo
-rm fifo
