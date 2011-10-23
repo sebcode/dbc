@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-require_once('FileList.class.php');
+require_once('../common/FileList.class.php');
 require_once('RemoteChangeListener.class.php');
 
 class Client
