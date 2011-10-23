@@ -1,0 +1,79 @@
+dbc - dropbox-like file synchronization for your own server
+
+this is an attempt to create a file synchronization tool that mimes the
+behavior of dropbox. dbc synchronizes a specified folder on your system with a
+folder on your server. your local folder is being watched for changes by the
+dbc client. everytime you add, delete or modify files, the changes are
+synchronized with the server. the dbc client can run on multiple systems
+simultaneously, each of them watching a local folder. changes made on one
+system are distributed to all connected clients on the network.
+
+this is a PROOF OF CONCEPT i wrote for myself to learn about this kind of file
+synchronization. this software is far from being complete. it is poorly tested
+and may lead to data loss. i am sure there are some major security glitches.
+use at your own risk.
+
+
+:: requirements ::
+
+ * client: php-cli 5.3 with curl, pcntl, posix
+ * server: apache with php 5.3
+
+tested on osx 10.7 and debian linux.
+
+the php build that ships with osx does not provide pcntl_fork, so if you want
+to use dbc client on osx, you will have to build php by hand. i recommend using
+macports:
+
+ * sudo port selfupdate && sudo port upgrade outdated
+ * sudo port install php5 +no_web +pear
+ * sudo port install php5-pcntl php5-posix php5-curl
+
+on linux (debian, ubuntu):
+
+ * sudo apt-get update && sudo apt-get upgrade
+ * sudo apt-get install php5-cli php5-curl
+
+
+:: server configuration ::
+
+copy the two folders "server" and "common" to a new folder (let's call it dbc)
+to your "htdocs" folder of your server.
+
+now rename the file "config.sample.php" in the "server" folder to "config.php"
+and edit the file. set the variable "baseDir" to the directory, where the data
+should be stored, e.g. "/opt/dbcdata/". the folder must be readable and
+writeable by the apache user.
+
+create the base-dir with "mkdir /opt/dbcdata/". each user has it's own directory
+in the base-dir. create a user by creating a new directory:
+"mkdir /opt/dbcdata/peter/". to assign a password to user peter, create
+the file "/opt/dbcdata/peter/pw" with the md5-hash of the password:
+"echo -n secretpassword | md5sum | cut -d\  -f1 > /opt/dbcdata/peter/pw".
+
+if you access the server url (e.g. http://example.com/dbc/server) you should
+see the message "SERVER_OK".
+
+security considerations: you should use ssl. you should set up a dedicated user
+and group for dbc. the server should not be publicly accessible via the
+internet at this stage. use at your own risk.
+
+
+:: client configuration ::
+
+go to the folder "client" and start the client:
+
+php client.php /home/peter/syncfolder
+
+the second parameter is the folder you want to watch. if you want to initialize
+a new folder, the folder must not exist.
+
+the client will ask for the server url (e.g. http://example.com/dbc/server),
+and username and password. after this, you should be able to use your
+syncfolder. quit the client with ctrl+c.
+
+
+--
+
+by sebastian volland
+
