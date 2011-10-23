@@ -22,6 +22,11 @@ class FileList
 
 		foreach (new RecursiveIteratorIterator($it) as $file) {
 			$relName = substr($file, strlen($dir));
+			$baseName = $file->getBaseName();
+
+			if ($baseName === '.' || $baseName === '..') {
+				continue;
+			}
 
 			if (strpos($relName, '.dbc') === 0) {
 				continue;
