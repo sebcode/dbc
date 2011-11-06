@@ -2,7 +2,7 @@
 <?php
 
 if (empty($argv[1])) {
-	echo "Syntax: dbc [data-directory]\n";
+	echo "Usage: dbc [data-directory]\n";
 	exit(1);
 }
 

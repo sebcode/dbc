@@ -16,7 +16,7 @@ use at your own risk.
 
 :: requirements ::
 
- * client: php-cli 5.3 with curl, pcntl, posix
+ * client: php-cli 5.3 with modules curl, pcntl, posix
  * server: apache with php 5.3
 
 tested on osx 10.7 and debian linux.
@@ -37,41 +37,52 @@ on linux (debian, ubuntu):
 
 :: server configuration ::
 
-copy the two folders "server" and "common" to a new folder (let's call it dbc)
-to your "htdocs" folder of your server.
+copy the contents of this folder to a new folder (let's call it dbc) to your
+"htdocs" folder of your server.
 
-now rename the file "config.sample.php" in the "server" folder to "config.php"
-and edit the file. set the variable "baseDir" to the directory, where the data
-should be stored, e.g. "/opt/dbcdata/". the folder must be readable and
-writeable by the apache user.
+rename the file "serverconfig.sample.php" to "serverconfig.php" and edit the
+file. set the variable "baseDir" to the directory, where the data should be
+stored, e.g. "/opt/dbcdata/". the folder must be readable and writeable by the
+apache user. create the base-dir with "mkdir /opt/dbcdata/".
 
-create the base-dir with "mkdir /opt/dbcdata/". each user has it's own directory
-in the base-dir. create a user by creating a new directory:
-"mkdir /opt/dbcdata/peter/". to assign a password to user peter, create
-the file "/opt/dbcdata/peter/pw" with the md5-hash of the password:
-"echo -n secretpassword | md5sum | cut -d\  -f1 > /opt/dbcdata/peter/pw".
+now use the commandline tool dbcserver.php to create a new user:
 
-if you access the server url (e.g. http://example.com/dbc/server) you should
-see the message "SERVER_OK".
+dbcserver.php adduser peter secretpassword
+
+this will create the user "peter" with the password "secretpassword".
+
+if you access the server url (e.g. http://example.com/dbc/) you should see the
+message "SERVER_OK".
 
 security considerations: you should use ssl. you should set up a dedicated user
-and group for dbc. the server should not be publicly accessible via the
-internet at this stage. use at your own risk.
+and group for dbc. use at your own risk. the server only requires the files
+index.php, Server*, FileList* and serverconfig.php. delete all other files.
 
 
 :: client configuration ::
 
-go to the folder "client" and start the client:
+start the client using the commandline client dbc.php:
 
-php client.php /home/peter/syncfolder
+dbc.php /home/peter/syncfolder
 
 the second parameter is the folder you want to watch. if you want to initialize
-a new folder, the folder must not exist.
+a new folder, you must specify a folder that does not exist.
 
 the client will ask for the server url (e.g. http://example.com/dbc/server),
 and username and password. after this, you should be able to use your
 syncfolder. quit the client with ctrl+c.
 
+
+:: files ::
+
+dbc.php                 : dbc commandline tool for the Client
+Client*.class.php       : Client classes used by dbc.php
+index.php               : index document for apache that responds to client requests
+dbcserver.php           : dbc commandline tool for the Server
+Server*.class.php       : Server classes used by index.php
+FileList.class.php      : filelist class used by client and server
+serverconfig.sample.php : server configuration file, edit and move to serverconfig.php
+tests/                  : folder with some unit tests for development
 
 --
 

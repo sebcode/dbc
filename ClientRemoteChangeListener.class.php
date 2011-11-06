@@ -1,6 +1,6 @@
 <?php
 
-class RemoteChangeListener
+class ClientRemoteChangeListener
 {
 	protected $serverUrl;
 	protected $user;

@@ -1,8 +1,8 @@
 #!/usr/bin/env php
 <?php
 
-require_once('../common/FileList.class.php');
-require_once('RemoteChangeListener.class.php');
+require_once('FileList.class.php');
+require_once('ClientRemoteChangeListener.class.php');
 
 class Client
 {
@@ -36,7 +36,7 @@ class Client
 	{
 		$this->handleStartupLock();
 
-		$this->rcl = new RemoteChangeListener($this->serverUrl, $this->user, $this->pwHash);
+		$this->rcl = new ClientRemoteChangeListener($this->serverUrl, $this->user, $this->pwHash);
 		$this->rcl->start();
 
 		$this->filelist = $this->findfiles($this->watchDir);
