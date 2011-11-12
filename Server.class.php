@@ -16,6 +16,8 @@ class Server
 
 	public function handleRequest()
 	{
+		set_time_limit(0);
+
 		$this->params = $_REQUEST;
 
 		if (empty($this->params['cmd'])) {
@@ -160,6 +162,13 @@ class Server
 
 			if ($hash != $originalHash) {
 				break;
+			}
+
+			/* try to send something every 10 sec, to detect connection abort. */
+			if (time() % 10 === 0) {
+				echo "\n";
+				flush();
+				ob_flush();
 			}
 			
 			if (connection_status() != CONNECTION_NORMAL) {
